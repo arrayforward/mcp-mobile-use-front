@@ -23,6 +23,9 @@ Write-Output "==> push binary"
 & $adb push $bin /data/local/tmp/mcp_mobile_use | Out-Null
 & $adb shell "chmod 755 /data/local/tmp/mcp_mobile_use"
 
+# 停止可能占用端口的 APK 前台服务（com.mcp.mobileuse）
+& $adb shell "am force-stop com.mcp.mobileuse" 2>$null
+
 Write-Output "==> stdio transport"
 $req = @'
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"e2e","version":"1.0"}}}
@@ -47,9 +50,12 @@ Check "stdio take_screenshot returns png" ($respText -match '"type":"image","dat
 Check "stdio unknown tool isError" ($respText -match 'unknown tool')
 
 Write-Output "==> http transport (streamable + sse)"
-& $adb shell "pkill -f mcp_mobile_use" 2>$null
+& $adb shell "pkill -f mcp_mobile_use; am force-stop com.mcp.mobileuse" 2>$null
+Start-Sleep 1
 & $adb shell "sh -c 'nohup /data/local/tmp/mcp_mobile_use -t http -p $Port >/data/local/tmp/mcp.log 2>&1 &'"
 Start-Sleep 1
+$started = & $adb shell "grep -q listening /data/local/tmp/mcp.log && echo ok || echo fail"
+if ($started -notmatch "ok") { Write-Output "FAIL: server failed to start:"; & $adb shell "cat /data/local/tmp/mcp.log" }
 & $adb forward tcp:$Port tcp:$Port | Out-Null
 
 $init = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"e2e","version":"1.0"}}}'
@@ -83,16 +89,22 @@ if ($sid) {
 Stop-Job $sseJob; Remove-Job $sseJob
 
 Write-Output "==> auth (token)"
-& $adb shell "pkill -f mcp_mobile_use" 2>$null
-Start-Sleep 1
+# 确保旧进程完全退出、端口释放后再启动鉴权服务（避免竞态命中旧无鉴权实例）
+& $adb shell "pkill -f mcp_mobile_use; am force-stop com.mcp.mobileuse" 2>$null
+Start-Sleep 2
 & $adb shell "sh -c 'nohup /data/local/tmp/mcp_mobile_use -t http -p $Port --auth-token e2e-secret >/data/local/tmp/mcp.log 2>&1 &'"
 Start-Sleep 2
+$authStarted = & $adb shell "grep -q listening /data/local/tmp/mcp.log && echo ok || echo fail"
+if ($authStarted -notmatch "ok") { Write-Output "FAIL: auth server failed to start:"; & $adb shell "cat /data/local/tmp/mcp.log" }
 $rejected = $false
-try {
-    $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/mcp" -Method Post -ContentType "application/json" -Body $init -TimeoutSec 10
-    $rejected = ($r.StatusCode -eq 401)
-} catch {
-    $rejected = ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 401)
+for ($i = 0; $i -lt 3 -and -not $rejected; $i++) {
+    try {
+        $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/mcp" -Method Post -ContentType "application/json" -Body $init -TimeoutSec 10
+        $rejected = ($r.StatusCode -eq 401)
+    } catch {
+        $rejected = ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 401)
+    }
+    if (-not $rejected) { Start-Sleep 1 }
 }
 Check "auth rejects missing token" $rejected
 try {
