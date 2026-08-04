@@ -20,6 +20,7 @@
 ## 文档
 
 - [接口文档（总览）](docs/README.md)
+- [测试报告](TEST_REPORT.md)
 - [架构设计](docs/architecture.md)
 - [安全方案（鉴权 + HTTPS）](docs/security.md)
 - [部署方案（系统服务 / 前台服务）](docs/deployment.md)

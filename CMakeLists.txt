@@ -55,6 +55,10 @@ if(ANDROID)
 else()
     add_executable(mcp_mobile_use_tests
         tests/test_main.cpp
+        tests/test_json.cpp
+        tests/test_util.cpp
+        tests/test_jwt.cpp
+        tests/test_command_builder.cpp
         src/json/json.cpp
         src/util/util.cpp
         src/util/sha256.cpp

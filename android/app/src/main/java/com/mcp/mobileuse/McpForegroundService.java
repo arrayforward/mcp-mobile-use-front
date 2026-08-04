@@ -65,6 +65,7 @@ public class McpForegroundService extends Service {
                 this, 0, new Intent(this, MainActivity.class),
                 PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_mylocation)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText("MCP server on :" + port + " (" + backend + ")")
                 .setContentIntent(pi)

@@ -10,7 +10,7 @@
 - [安全方案（鉴权 + HTTPS）](security.md)
 - [部署方案](deployment.md)
 - [使用说明](usage.md)
-- [测试方案](testing.md)
+- [测试方案](testing.md)（完整结果见 [TEST_REPORT.md](../TEST_REPORT.md)）
 - [扩展开发文档](development.md)
 - [传输方式](transport.md)：stdio / sse / streamable-http
 - [执行后端（backend 参数）](backend.md)：adb（本机命令，默认）/ cloud（华为云 CPH API）
