@@ -1,0 +1,33 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.mcp.mobileuse'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.mcp.mobileuse"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDir 'jniLibs'
+        }
+    }
+}
+
+tasks.register('copyJniLib', Copy) {
+    def soFile = file("${rootDir}/../build-android/libmcp_mobile_use_jni.so")
+    from(soFile) {
+        into 'arm64-v8a'
+    }
+    into file("${projectDir}/jniLibs")
+    onlyIf { soFile.exists() }
+}
+
+preBuild.dependsOn copyJniLib

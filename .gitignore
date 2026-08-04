@@ -1,0 +1,19 @@
+# build outputs
+build-*/
+*.o
+*.a
+*.so
+*.exe
+
+# android
+android/.gradle/
+android/app/build/
+android/app/jniLibs/
+android/local.properties
+android/.idea/
+*.apk
+
+# misc
+*.log
+req*.txt
+resp*.txt
