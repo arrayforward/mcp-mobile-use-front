@@ -66,6 +66,11 @@ HTTP 请求 ──▶ McpHttpTransport（/sse、/message、/mcp）
 | JWT RS256 | OpenSSL `EVP_DigestVerify`，PEM 公钥/x509 证书 | OpenSSL |
 | HTTPS | `HttpServer::startTls`（`Io` 抽象统一明文/TLS 读写） | OpenSSL |
 
+**mcp-proxy 网关集成**：部署在 `mcp-proxy` 网关之后时，Agent 请求携带网关签发的 JWT，
+云机内 mcp_mobile_use 需要**获取 mcp-proxy 的公钥**（JWKS 端点或 PEM 文件下发）并以
+`--auth-jwt-public-key` 配置，完成 RS256 验签；网关当前为 HS256 共享密钥阶段可用
+`--auth-jwt-secret` 对齐（详见 [安全方案](security.md)）。
+
 详见 [安全方案](security.md)。传输层与协议层完全解耦：鉴权只挂在 `McpHttpTransport` 入口，
 不影响 stdio/协议实现，新增后端或工具无需感知。
 

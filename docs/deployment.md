@@ -86,7 +86,13 @@ module/
 mcp_mobile_use -t http -p 8080 --auth-token '你的token'
 # JWT + HTTPS
 mcp_mobile_use -t http -p 8443 --auth-jwt-secret 'hs256密钥' --tls-cert server.crt --tls-key server.key
+# 网关（mcp-proxy）公钥验签（RS256）
+mcp_mobile_use -t http -p 8080 --auth-jwt-public-key /path/to/mcp-proxy-public.pem
 ```
 
 支持静态 Token / JWT（HS256、RS256，可加载 PEM 公钥或 x509 证书）/ HTTPS，
 详见 [安全方案](security.md)。客户端请求需携带 `Authorization: <token>` 或 `Authorization: Bearer <jwt>`。
+
+**mcp-proxy 网关集成**：部署在网关后时，mcp_mobile_use 必须获取 mcp-proxy 的**公钥**
+（RS256 非对称验签，通过 JWKS 端点或 PEM 文件下发）并用 `--auth-jwt-public-key` 配置；
+网关当前为 HS256 时可先用 `--auth-jwt-secret` 保持一致。详见 [安全方案](security.md)。

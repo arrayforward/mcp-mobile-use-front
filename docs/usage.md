@@ -105,6 +105,23 @@ URL: http://127.0.0.1:8080/sse
 | `CPH_TOKEN` | IAM Token（优先） |
 | `CPH_AK` / `CPH_SK` | AK/SK 签名（Token 缺省时使用） |
 
+鉴权相关环境变量：`MCP_AUTH_TOKEN` / `MCP_JWT_SECRET` / `MCP_JWT_PUBLIC_KEY`
+（与命令行参数等价，见[安全方案](security.md)）。
+
+## mcp-proxy 网关集成（公钥验签）
+
+部署在 `D:\agent\mcp-proxy` 网关之后时，**mcp_mobile_use 必须获取 mcp-proxy 的公钥**
+来验签网关下发的 JWT：
+
+```bash
+# 1) 获取公钥：网关 JWKS 端点或运维下发 PEM 公钥文件
+# 2) 配置到云机
+mcp_mobile_use -t http -p 8080 --auth-jwt-public-key /data/local/tmp/mcp-proxy-public.pem
+```
+
+网关当前为 HS256 共享密钥时：`--auth-jwt-secret <与网关 security.jwt.secret 相同的密钥>`。
+详见[安全方案](security.md)「与 mcp-proxy 网关集成」。
+
 ## 工具调用示例
 
 ```bash

@@ -13,6 +13,76 @@
 
 优先级：命令行参数 > 环境变量；同时配置 token 与 jwt 时 jwt 优先。默认 `none` 不校验。
 
+## 与 mcp-proxy 网关集成（JWT 公钥验签）
+
+部署在 `mcp-proxy`（`D:\agent\mcp-proxy`，云手机 MCP 代理网关）之后时，
+Agent 与云机内的 mcp_mobile_use 不直接通信，请求经网关转发，**mcp_mobile_use 收到的
+是网关签发的 JWT**，因此必须能验签网关签发的令牌。
+
+### 集成要求：mcp 必须拿到 mcp-proxy 的公钥
+
+> **鉴权前提：mcp_mobile_use（云机内）需要获取 mcp-proxy 的公钥**，用于验签网关下发的
+> `Authorization: Bearer <JWT>`，公钥与私钥为 RSA 非对称密钥对（RS256）。
+
+```
+Agent ──10s临时token──▶ mcp-proxy 网关
+Agent ◀─RS256 JWT(uid+instanceId)──
+Agent ──Bearer JWT──▶ mcp-proxy ──转发──▶ mcp_mobile_use（云机内）
+                                              │ 用 mcp-proxy 公钥验签 JWT
+                                              ▼
+                                         Protocol::handleMessage
+```
+
+公钥获取与配置方式（任选其一）：
+
+| 方式 | 说明 |
+|---|---|
+| JWKS 端点 | 网关提供 `GET /jwks` 返回 RSA 公钥（JWK），运维/Agent 拉取后导出 PEM 交给云机 |
+| 文件下发 | 将网关导出的 PEM 公钥（`BEGIN PUBLIC KEY`）预置到云机镜像/配置，启动参数指定路径 |
+
+启动方式：
+
+```bash
+# 方式一：PEM 公钥文件
+mcp_mobile_use -t http -p 8080 \
+  --auth-jwt-public-key /data/local/tmp/mcp-proxy-public.pem
+
+# 方式二：x509 证书（网关证书含公钥）
+mcp_mobile_use -t http -p 8080 \
+  --auth-jwt-public-key /data/local/tmp/mcp-proxy.crt
+```
+
+> 说明：`--auth-jwt-public-key` 同时支持 PEM 公钥与 x509 证书文件（自动提取公钥），
+> 需要 OpenSSL 构建（`MCP_WITH_OPENSSL=ON`）。
+
+### 网关 JWT 载荷（mcp-proxy `JwtService` 签发）
+
+```json
+{
+  "sub": "user-10001",
+  "uid": "user-10001",
+  "instanceId": "Ab3xYz9p",
+  "iat": 1722700000,
+  "exp": 1722701800,
+  "jti": "uuid"
+}
+```
+
+mcp_mobile_use 验签时自动校验 `exp`/`nbf`；如需校验 `instanceId` 归属
+（请求路径与 JWT 归属一致），可由网关层完成（mcp-proxy 已实现双重校验），
+云机内仅做签名与有效期校验。
+
+### 网关密钥现状与演进
+
+| 阶段 | 网关签名算法 | 云机 mcp_mobile_use 配置 |
+|---|---|---|
+| 当前（mcp-proxy v1.2） | HS256 共享密钥（`security.jwt.secret`，默认 `mcp-proxy-dev-secret-key-0123456789abcdef`） | `--auth-jwt-secret <同一密钥>` |
+| 目标（推荐） | RS256 非对称密钥对 | `--auth-jwt-public-key <网关公钥>`（需网关改造为 RS256 并暴露公钥/JWKS） |
+
+> 网关未提供公钥端点前，可先用 HS256 共享密钥打通（`--auth-jwt-secret` 与网关
+> `security.jwt.secret` 保持一致）；网关支持 RS256 + JWKS 后切换到公钥验签，
+> 公钥通过 JWKS 或文件下发获取。
+
 ## 鉴权方案
 
 实现位于 `src/mcp/auth.hpp`、`src/mcp/jwt.hpp`，结构对齐参考项目
