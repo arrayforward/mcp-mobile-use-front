@@ -60,6 +60,23 @@ mcp_mobile_use -t http -p 8080
 
 在同一端口同时挂载 `/sse`、`/message`、`/mcp` 三个端点，APK 前台服务模式默认使用此方式。
 
+## 健康检查 /healthz
+
+所有 HTTP 模式（sse / streamable-http / http）均提供探活接口：
+
+```bash
+curl http://<host>:8080/healthz
+# {"status":"ok","name":"mcp_mobile_use","version":"0.1.0"}
+```
+
+- 返回 `200` + JSON，供外部服务（负载均衡、容器探针、监控）判断服务存活
+- **不校验鉴权**，始终可访问（仅反映进程与服务是否存活）
+
+## 多路连接
+
+- **并发连接**：thread-per-connection 模型，可同时处理任意数量客户端（SSE 长连接与普通请求互不阻塞）
+- **keep-alive**：同一 TCP 连接支持连续多个请求复用（HTTP/1.1，单连接上限 100 次请求，空闲 60 秒超时断开），减少握手开销
+
 ## 鉴权与 TLS
 
 HTTP 传输（sse/streamable-http/http）支持可选鉴权与 HTTPS，默认关闭：

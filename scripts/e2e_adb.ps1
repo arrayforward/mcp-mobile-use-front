@@ -64,6 +64,25 @@ try {
     Check "streamable initialize" ($r.result.serverInfo.name -eq "mcp_mobile_use")
 } catch { Check "streamable initialize" $false }
 
+# healthz 探活接口
+try {
+    $h = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/healthz" -Method Get -TimeoutSec 10
+    Check "healthz returns ok" ($h.status -eq "ok" -and $h.name -eq "mcp_mobile_use")
+} catch { Check "healthz returns ok" $false }
+
+# keep-alive: 单连接多请求复用（3 个请求 num_connects 依次为 1,0,0）
+# 注意：curl 多 URL 时响应体与 -w 输出交错，num_connects 数字位于每行行尾，取行尾数字
+$kaBody = Join-Path $tmp "ka_body.bin"
+$kaOut = curl.exe -s -o $kaBody -w "%{num_connects}`n" http://127.0.0.1:$Port/healthz http://127.0.0.1:$Port/healthz http://127.0.0.1:$Port/healthz
+$kaSeq = ($kaOut | ForEach-Object { if ($_ -match '(\d+)$') { $matches[1] } }) -join ","
+Check "keep-alive reuses connection" ($kaSeq -eq "1,0,0")
+
+# 多路并发: 8 个并行请求
+$jobs = 1..8 | ForEach-Object { Start-Job { param($p) curl.exe -s -o NUL -w "%{http_code}" "http://127.0.0.1:$p/healthz" } -ArgumentList $Port }
+$codes = $jobs | Wait-Job | Receive-Job
+$jobs | Remove-Job
+Check "concurrent connections" (($codes | Where-Object { $_ -eq "200" }).Count -eq 8)
+
 $call = '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"back","arguments":{}}}'
 try {
     $r = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/mcp" -Method Post -ContentType "application/json" -Body $call -TimeoutSec 10

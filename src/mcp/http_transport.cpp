@@ -18,12 +18,23 @@ std::string randomSessionId() {
 }  // namespace
 
 void McpHttpTransport::registerRoutes(net::HttpServer& server) {
+    server.addRoute("GET", "/healthz",
+                    [](const net::Request&) { return McpHttpTransport::handleHealth(); });
     server.addRoute("GET", "/sse",
                     [this](const net::Request& req) { return handleSseConnect(req); });
     server.addRoute("POST", "/message",
                     [this](const net::Request& req) { return handleSseMessage(req); });
     server.addRoute("POST", "/mcp",
                     [this](const net::Request& req) { return handleStreamable(req); });
+}
+
+net::Response McpHttpTransport::handleHealth() {
+    // 健康检查：不校验鉴权，供外部负载均衡/探活使用
+    mj::Value info = mj::Value::object();
+    info["status"] = "ok";
+    info["name"] = Protocol::serverName();
+    info["version"] = Protocol::serverVersion();
+    return net::Response::json(200, info.dump());
 }
 
 std::string McpHttpTransport::createSession() {

@@ -13,8 +13,10 @@ mcp_mobile_use 运行在云手机 Android 环境内部，对外提供标准 MCP�
 │ 传输层 src/mcp/ src/net/                                 │
 │  ├─ StdioServer          （stdin/stdout 行分隔 JSON-RPC）│
 │  ├─ McpHttpTransport     （/sse + /message，SSE 推送）   │
-│  └─ McpHttpTransport     （/mcp，streamable-http 同步）  │
-│        底层为手写 socket HTTP server（thread-per-conn）  │
+│  ├─ McpHttpTransport     （/mcp，streamable-http 同步）  │
+│  └─ /healthz             （探活接口，不校验鉴权）        │
+│        底层为手写 socket HTTP server（thread-per-conn， │
+│        keep-alive 复用，单连接上限 100 请求/60s 空闲超时）│
 ├─────────────────────────────────────────────────────────┤
 │ 协议层 src/mcp/protocol.cpp                              │
 │  initialize / ping / tools/list / tools/call 分发        │

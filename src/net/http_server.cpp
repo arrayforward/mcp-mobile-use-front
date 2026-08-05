@@ -16,6 +16,9 @@ namespace net {
 
 namespace {
 
+const int kMaxRequestsPerConn = 100;   // 单连接最大请求数，防止无限复用
+const int kIdleTimeoutSec = 60;        // keep-alive 空闲超时
+
 std::string lower(const std::string& s) {
     std::string out = s;
     for (auto& c : out) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
@@ -213,6 +216,10 @@ void HttpServer::acceptLoop() {
         std::thread([this, fd] {
             Io io;
             io.fd = fd;
+            struct timeval tv;
+            tv.tv_sec = kIdleTimeoutSec;
+            tv.tv_usec = 0;
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #ifdef MCP_WITH_OPENSSL
             if (sslCtx_) {
                 io.ssl = SSL_new(sslCtx_);
@@ -236,24 +243,67 @@ void HttpServer::acceptLoop() {
 void HttpServer::handleConnection(Io& io) {
     std::string raw;
     raw.reserve(4096);
-    char buf[8192];
-    size_t headerEnd = std::string::npos;
+    int requestCount = 0;
 
+    while (!stop_.load()) {
+        Request req;
+        if (!readRequest(io, raw, req)) return;
+
+        requestCount++;
+        const Handler* handler = findRoute(req.method, req.path);
+        if (!handler) {
+            Response r = Response::json(404, "{\"error\":\"not found\"}");
+            io.writeAll("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n"
+                        "Content-Length: " + std::to_string(r.body.size()) +
+                        "\r\nConnection: close\r\n\r\n");
+            io.writeAll(r.body);
+            return;
+        }
+
+        Response resp;
+        try {
+            resp = (*handler)(req);
+        } catch (const std::exception& e) {
+            resp = Response::json(500, std::string("{\"error\":\"") + e.what() + "\"}");
+        }
+
+        if (resp.sse) {
+            io.writeAll("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                        "Cache-Control: no-cache\r\nConnection: keep-alive\r\n"
+                        "Access-Control-Allow-Origin: *\r\n\r\n");
+            if (resp.sseHandler) resp.sseHandler(io);
+            return;
+        }
+
+        bool keepAlive = req.header("Connection") != "close" && requestCount < kMaxRequestsPerConn;
+        std::string reason = resp.status == 200 ? "OK" : (resp.status == 202 ? "Accepted" : "Error");
+        std::string head = "HTTP/1.1 " + std::to_string(resp.status) + " " + reason + "\r\n";
+        head += "Content-Type: " + resp.contentType + "\r\n";
+        head += "Content-Length: " + std::to_string(resp.body.size()) + "\r\n";
+        for (const auto& h : resp.extraHeaders) head += h.first + ": " + h.second + "\r\n";
+        head += keepAlive ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n";
+        if (!io.writeAll(head) || !io.writeAll(resp.body)) return;
+        if (!keepAlive) return;
+    }
+}
+
+bool HttpServer::readRequest(Io& io, std::string& raw, Request& req) {
+    size_t headerEnd = std::string::npos;
     while (raw.size() < 1024 * 1024) {
-        ssize_t r = io.read(buf, sizeof(buf));
-        if (r <= 0) return;
-        raw.append(buf, static_cast<size_t>(r));
         headerEnd = raw.find("\r\n\r\n");
         if (headerEnd != std::string::npos) break;
+        char buf[8192];
+        ssize_t r = io.read(buf, sizeof(buf));
+        if (r <= 0) return false;
+        raw.append(buf, static_cast<size_t>(r));
     }
-    if (headerEnd == std::string::npos) return;
+    if (headerEnd == std::string::npos) return false;
 
-    Request req;
     size_t lineEnd = raw.find("\r\n");
     std::string requestLine = raw.substr(0, lineEnd);
     size_t sp1 = requestLine.find(' ');
     size_t sp2 = requestLine.find(' ', sp1 == std::string::npos ? sp1 : sp1 + 1);
-    if (sp1 == std::string::npos || sp2 == std::string::npos) return;
+    if (sp1 == std::string::npos || sp2 == std::string::npos) return false;
     req.method = requestLine.substr(0, sp1);
     std::string target = requestLine.substr(sp1 + 1, sp2 - sp1 - 1);
     size_t q = target.find('?');
@@ -283,46 +333,16 @@ void HttpServer::handleConnection(Io& io) {
     std::string cl = req.header("Content-Length");
     if (!cl.empty()) contentLength = static_cast<size_t>(atol(cl.c_str()));
 
-    req.body = raw.substr(headerEnd + 4);
-    while (req.body.size() < contentLength) {
+    size_t bodyStart = headerEnd + 4;
+    while (raw.size() < bodyStart + contentLength) {
+        char buf[8192];
         ssize_t r = io.read(buf, sizeof(buf));
-        if (r <= 0) break;
-        req.body.append(buf, static_cast<size_t>(r));
+        if (r <= 0) return false;
+        raw.append(buf, static_cast<size_t>(r));
     }
-    if (req.body.size() > contentLength) req.body.resize(contentLength);
-
-    const Handler* handler = findRoute(req.method, req.path);
-    if (!handler) {
-        Response r = Response::json(404, "{\"error\":\"not found\"}");
-        io.writeAll("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: " +
-                    std::to_string(r.body.size()) + "\r\nConnection: close\r\n\r\n");
-        io.writeAll(r.body);
-        return;
-    }
-
-    Response resp;
-    try {
-        resp = (*handler)(req);
-    } catch (const std::exception& e) {
-        resp = Response::json(500, std::string("{\"error\":\"") + e.what() + "\"}");
-    }
-
-    if (resp.sse) {
-        io.writeAll("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
-                    "Cache-Control: no-cache\r\nConnection: keep-alive\r\n"
-                    "Access-Control-Allow-Origin: *\r\n\r\n");
-        if (resp.sseHandler) resp.sseHandler(io);
-        return;
-    }
-
-    std::string reason = resp.status == 200 ? "OK" : (resp.status == 202 ? "Accepted" : "Error");
-    std::string head = "HTTP/1.1 " + std::to_string(resp.status) + " " + reason + "\r\n";
-    head += "Content-Type: " + resp.contentType + "\r\n";
-    head += "Content-Length: " + std::to_string(resp.body.size()) + "\r\n";
-    for (const auto& h : resp.extraHeaders) head += h.first + ": " + h.second + "\r\n";
-    head += "Connection: close\r\n\r\n";
-    io.writeAll(head);
-    if (!resp.body.empty()) io.writeAll(resp.body);
+    req.body = raw.substr(bodyStart, contentLength);
+    raw.erase(0, bodyStart + contentLength);
+    return true;
 }
 
 }  // namespace net

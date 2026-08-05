@@ -70,6 +70,7 @@ public:
 private:
     void acceptLoop();
     void handleConnection(Io& io);
+    bool readRequest(Io& io, std::string& buffer, Request& req);
     const Handler* findRoute(const std::string& method, const std::string& path) const;
     bool shouldStop() const { return stop_.load(); }
 

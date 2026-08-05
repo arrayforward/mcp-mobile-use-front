@@ -26,6 +26,7 @@ private:
         bool closed = false;
     };
 
+    static net::Response handleHealth();
     net::Response handleSseConnect(const net::Request& req);
     net::Response handleSseMessage(const net::Request& req);
     net::Response handleStreamable(const net::Request& req);
