@@ -10,6 +10,8 @@ set(MCP_CORE_SOURCES
     src/json/json.cpp
     src/util/util.cpp
     src/util/sha256.cpp
+    src/util/bignum.cpp
+    src/util/rsa_verify.cpp
     src/service/command_builder.cpp
     src/service/cloud_config.cpp
     src/service/local_executor.cpp
@@ -63,9 +65,24 @@ else()
         src/json/json.cpp
         src/util/util.cpp
         src/util/sha256.cpp
+        src/util/bignum.cpp
+        src/util/rsa_verify.cpp
         src/mcp/jwt.cpp
         src/service/command_builder.cpp
     )
+    # URL 公钥拉取的 mock 测试依赖 net/auth 模块（POSIX socket），Windows 主机跳过
+    if(NOT WIN32)
+        target_sources(mcp_mobile_use_tests PRIVATE
+            tests/test_url_fetch.cpp
+            src/mcp/auth.cpp
+            src/net/http_server.cpp
+            src/net/https_client.cpp
+        )
+        target_compile_definitions(mcp_mobile_use_tests PRIVATE MCP_WITH_MOCK_HTTP_TEST)
+        target_link_libraries(mcp_mobile_use_tests PRIVATE pthread)
+    else()
+        target_sources(mcp_mobile_use_tests PRIVATE tests/test_url_fetch.cpp)
+    endif()
     target_include_directories(mcp_mobile_use_tests PRIVATE src)
     enable_testing()
     add_test(NAME mcp_mobile_use_tests COMMAND mcp_mobile_use_tests)

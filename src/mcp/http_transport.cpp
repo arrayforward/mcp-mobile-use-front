@@ -1,3 +1,23 @@
+/**
+ * @file http_transport.cpp
+ * @brief HTTP 传输层实现——路由注册、鉴权入口、SSE 会话推送循环
+ *
+ * 功能：
+ *   实现 http_transport.hpp 声明的 McpHttpTransport：
+ *   - 四个端点（/healthz /sse /message /mcp）的处理逻辑；
+ *   - 会话 id 生成与 m_sessions 表的增删查；
+ *   - SSE 长连接内的消息推送循环（15 秒空闲发 keepalive）。
+ *
+ * 开发思路：
+ *   1. 鉴权在各 handler 第一行统一执行，/healthz 静态处理免鉴权；
+ *   2. /sse 返回的 Response 携带 sseHandler 闭包，由 HTTP 服务器在连接
+ *      线程中执行，闭包内按 "wait_for 队列 -> 批量写出" 循环；
+ *   3. 写流失败立即置 closed 并退出循环，最后统一 removeSession，
+ *      保证会话表不泄漏。
+ *
+ * @author hubin
+ * @date 2026-08-05
+ */
 #include "http_transport.hpp"
 
 #include <chrono>
@@ -7,6 +27,10 @@ namespace mcp {
 
 namespace {
 
+/**
+ * @brief 生成 32 位十六进制随机会话 id
+ * @return 32 字符小写十六进制串
+ */
 std::string randomSessionId() {
     static std::mt19937_64 rng(std::random_device{}());
     static const char* kHex = "0123456789abcdef";
@@ -39,38 +63,42 @@ net::Response McpHttpTransport::handleHealth() {
 
 std::string McpHttpTransport::createSession() {
     std::string id = randomSessionId();
-    std::lock_guard<std::mutex> lock(sessionsMutex_);
-    sessions_[id] = std::make_shared<SseSession>();
+    std::lock_guard<std::mutex> lock(m_sessionsMutex);
+    m_sessions[id] = std::make_shared<SseSession>();
     return id;
 }
 
 std::shared_ptr<McpHttpTransport::SseSession> McpHttpTransport::findSession(
     const std::string& id) {
-    std::lock_guard<std::mutex> lock(sessionsMutex_);
-    auto it = sessions_.find(id);
-    return it == sessions_.end() ? nullptr : it->second;
+    std::lock_guard<std::mutex> lock(m_sessionsMutex);
+    auto it = m_sessions.find(id);
+    return it == m_sessions.end() ? nullptr : it->second;
 }
 
 void McpHttpTransport::removeSession(const std::string& id) {
-    std::lock_guard<std::mutex> lock(sessionsMutex_);
-    sessions_.erase(id);
+    std::lock_guard<std::mutex> lock(m_sessionsMutex);
+    m_sessions.erase(id);
 }
 
 net::Response McpHttpTransport::handleSseConnect(const net::Request& req) {
-    if (!auth_.check(req)) return net::Response::json(401, "{\"error\":\"unauthorized\"}");
+    // transport 入口统一鉴权
+    if (!m_auth.check(req)) return net::Response::json(401, "{\"error\":\"unauthorized\"}");
     std::string sessionId = createSession();
 
     net::Response resp;
     resp.sse = true;
+    // sseHandler 由 HTTP 服务器在该连接线程中执行，直至连接结束
     resp.sseHandler = [this, sessionId](net::Io& io) {
         auto session = findSession(sessionId);
         if (!session) return;
 
+        // 首帧：告知客户端上行 POST 的端点（MCP SSE 规范）
         if (!io.writeAll("event: endpoint\ndata: /message?sessionId=" + sessionId + "\n\n")) {
             removeSession(sessionId);
             return;
         }
 
+        // 推送循环：等待队列有数据或 15 秒超时 -> 批量写出 / keepalive
         while (true) {
             std::deque<std::string> pending;
             {
@@ -82,10 +110,12 @@ net::Response McpHttpTransport::handleSseConnect(const net::Request& req) {
                 if (hasData) pending.swap(session->queue);
             }
 
+            // 15 秒无消息：发注释帧保活，防止中间代理断连
             if (pending.empty()) {
                 if (!io.writeAll(": keepalive\n\n")) break;
                 continue;
             }
+            // 逐条写出 message 事件；写失败说明连接已断，置 closed 退出
             while (!pending.empty()) {
                 const std::string& msg = pending.front();
                 if (!io.writeAll("event: message\ndata: " + msg + "\n\n")) {
@@ -102,15 +132,16 @@ net::Response McpHttpTransport::handleSseConnect(const net::Request& req) {
 }
 
 net::Response McpHttpTransport::handleSseMessage(const net::Request& req) {
-    if (!auth_.check(req)) return net::Response::json(401, "{\"error\":\"unauthorized\"}");
+    if (!m_auth.check(req)) return net::Response::json(401, "{\"error\":\"unauthorized\"}");
     std::string sessionId = req.queryParam("sessionId");
     auto session = findSession(sessionId);
     if (!session) {
         return net::Response::json(404, "{\"error\":\"unknown sessionId\"}");
     }
 
+    // 处理 JSON-RPC；有响应则入队并唤醒 /sse 推送线程，本身回 202
     std::string responseJson;
-    bool hasResponse = protocol_.handleMessage(req.body, responseJson);
+    bool hasResponse = m_protocol.handleMessage(req.body, responseJson);
     if (hasResponse && !responseJson.empty()) {
         {
             std::lock_guard<std::mutex> lock(session->m);
@@ -122,9 +153,10 @@ net::Response McpHttpTransport::handleSseMessage(const net::Request& req) {
 }
 
 net::Response McpHttpTransport::handleStreamable(const net::Request& req) {
-    if (!auth_.check(req)) return net::Response::json(401, "{\"error\":\"unauthorized\"}");
+    if (!m_auth.check(req)) return net::Response::json(401, "{\"error\":\"unauthorized\"}");
+    // Streamable 模式：同步返回 JSON；通知类消息无响应则回 202 空体
     std::string responseJson;
-    bool hasResponse = protocol_.handleMessage(req.body, responseJson);
+    bool hasResponse = m_protocol.handleMessage(req.body, responseJson);
     if (!hasResponse || responseJson.empty()) {
         net::Response resp = net::Response::text(202, "");
         return resp;
