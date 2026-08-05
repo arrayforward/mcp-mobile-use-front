@@ -59,7 +59,7 @@ powershell -File scripts/e2e_adb.ps1
 #   PASS: sse message delivery (tap)
 #   PASS: auth rejects missing token
 #   PASS: auth accepts valid token
-#   e2e result: 15 passed, 0 failed
+#   e2e result: 16 passed, 0 failed
 ```
 
 ### 已验证环�?
@@ -70,4 +70,5 @@ powershell -File scripts/e2e_adb.ps1
 
 - 安装 `app-debug.apk`（minSdk 26）到真机，前台服�?+ JNI 加载核心�?- 协议层（initialize/tools/list/ping/terminate/SSE）全部通过
 - 已修复：`Bad notification for startForeground` 崩溃（补 `setSmallIcon`�?- 设备操作命令在普�?app 身份下受权限限制（预期降级，详见 TEST_REPORT.md 第三节）
+
 

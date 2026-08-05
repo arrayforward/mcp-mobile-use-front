@@ -25,6 +25,7 @@ set(MCP_CORE_SOURCES
     src/mcp/http_transport.cpp
     src/tool/base.cpp
     src/tool/registry.cpp
+    src/tool/adb_shell.cpp
     src/tool/screen_tap.cpp
     src/tool/screen_swipe.cpp
     src/tool/take_screenshot.cpp

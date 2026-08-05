@@ -46,6 +46,10 @@ public:
     bool listApps(Backend b, bool thirdPartyOnly, std::vector<AppItem>& apps, std::string& err);
     bool installApp(Backend b, const std::string& downloadUrl, std::string& err);
 
+    // 标准 adb shell 接口：执行任意 shell 命令（对齐 adb shell <cmd>）
+    bool runShell(Backend b, const std::string& command, int timeoutMs, ExecResult& out,
+                  std::string& err);
+
 private:
     Executor* executor(Backend b);
     bool readScreenSize(Backend b, int& width, int& height);

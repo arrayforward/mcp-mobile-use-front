@@ -183,6 +183,16 @@ bool MobileUseProvider::listApps(Backend b, bool thirdPartyOnly, std::vector<App
     return true;
 }
 
+bool MobileUseProvider::runShell(Backend b, const std::string& command, int timeoutMs,
+                                 ExecResult& out, std::string& err) {
+    out = executor(b)->runShell(command, timeoutMs > 0 ? timeoutMs : defaultTimeoutMs_);
+    if (!out.error.empty()) {
+        err = "adb shell failed: " + out.error;
+        return false;
+    }
+    return true;
+}
+
 bool MobileUseProvider::installApp(Backend b, const std::string& downloadUrl,
                                    std::string& err) {
     const std::string localPath = "/data/local/tmp/mcp_mobile_use_install.apk";

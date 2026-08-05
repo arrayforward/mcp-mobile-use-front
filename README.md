@@ -8,14 +8,14 @@
 
 ## 特性
 
-- 12 个工具，与参考项目接口完全对齐（tap/swipe/take_screenshot/text_input/back/home/menu/
-  launch_app/close_app/list_apps/autoinstall_app/terminate）
+- 13 个工具：12 个与参考项目接口完全对齐（tap/swipe/take_screenshot/text_input/back/home/menu/
+  launch_app/close_app/list_apps/autoinstall_app/terminate）+ 标准 `adb_shell` 通用命令接口
 - 三种 MCP 传输：**stdio / sse / streamable-http**
 - 双执行后端：**adb**（本机 shell，默认）/ **cloud**（华为云 CPH API），工具调用可选 `backend` 参数
 - 截图 base64 内联返回（MCP image content），LLM 直接可读
 - 部署双模式：**native 二进制**（root+签名→系统服务）/ **Java APK 前台服务**（JNI 加载同一核心库）
 - 可选安全：静态 Token / JWT（HS256 手写、RS256 证书加载）/ HTTPS
-- 中文文档、主机单测（63 项）+ 真机 e2e（12 项）
+- 中文文档、主机单测（65 项）+ 真机 e2e（16 项）
 
 ## 文档
 

@@ -3,6 +3,7 @@
 namespace tool {
 
 ToolDef makeTapTool();
+ToolDef makeAdbShellTool();
 ToolDef makeSwipeTool();
 ToolDef makeTakeScreenshotTool();
 ToolDef makeTextInputTool();
@@ -18,6 +19,7 @@ ToolDef makeTerminateTool();
 std::vector<ToolDef> allTools() {
     std::vector<ToolDef> tools;
     tools.push_back(makeTapTool());
+    tools.push_back(makeAdbShellTool());
     tools.push_back(makeSwipeTool());
     tools.push_back(makeTakeScreenshotTool());
     tools.push_back(makeTextInputTool());

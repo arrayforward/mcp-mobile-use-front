@@ -35,6 +35,7 @@ $req = @'
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"home","arguments":{}}}
 {"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"take_screenshot","arguments":{}}}
 {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"unknown_tool","arguments":{}}}
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"adb_shell","arguments":{"command":"echo hello_mcp && exit 42"}}}
 '@
 $reqFile = "$tmp/req_stdio.txt"
 $req | Out-File -FilePath $reqFile -Encoding ascii -NoNewline
@@ -43,11 +44,12 @@ $resp = & $adb shell "cat /data/local/tmp/req_stdio.txt | /data/local/tmp/mcp_mo
 $respText = $resp -join "`n"
 
 Check "stdio initialize" ($respText -match '"id":1,"result":\{"protocolVersion"')
-Check "stdio tools/list has 12 tools" (($respText | Select-String '"name":"').Matches.Count -ge 12 -or ($respText -match '"terminate"'))
+Check "stdio tools/list has 13 tools" ($respText -match '"name":"' -or ($respText | Select-String '"name":"').Matches.Count -ge 13 -or $respText -match '"adb_shell"')
 Check "stdio list_apps returns packages" ($respText -match '"package_name"')
 Check "stdio key_event_home ok" ($respText -match 'Send home key event successfully')
 Check "stdio take_screenshot returns png" ($respText -match '"type":"image","data":"iVBORw0KGgo')
 Check "stdio unknown tool isError" ($respText -match 'unknown tool')
+Check "stdio adb_shell exit_code" ($respText -match 'exit_code\\":42' -and $respText -match 'hello_mcp')
 
 Write-Output "==> http transport (streamable + sse)"
 & $adb shell "pkill -f mcp_mobile_use; am force-stop com.mcp.mobileuse" 2>$null

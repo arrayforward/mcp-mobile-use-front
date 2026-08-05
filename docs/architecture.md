@@ -21,7 +21,7 @@ mcp_mobile_use 运行在云手机 Android 环境内部，对外提供标准 MCP�
 │ 协议层 src/mcp/protocol.cpp                              │
 │  initialize / ping / tools/list / tools/call 分发        │
 ├─────────────────────────────────────────────────────────┤
-│ 工具层 src/tool/（12 个工具，对齐 mcp_server_mobile_use）│
+│ 工具层 src/tool/（13 个工具：12 个对齐 mcp_server_mobile_use + adb_shell 通用接口）│
 │  schema 定义 + 参数校验 + 结果封装（text / image）       │
 ├─────────────────────────────────────────────────────────┤
 │ 服务层 src/service/                                      │
@@ -156,7 +156,7 @@ mcp_mobile_use/
 │   ├── net/                    # http_server（手写 socket）、https_client（OpenSSL）
 │   ├── mcp/                    # protocol、stdio_server、http_transport（sse+streamable）
 │   ├── service/                # command_builder、executor、provider、hw_signer
-│   ├── tool/                   # 12 个 MCP 工具
+│   ├── tool/                   # 13 个 MCP 工具（12 个对齐参考 + adb_shell）
 │   ├── main.cpp                # native 入口（三种传输）
 │   └── android/jni_bridge.cpp  # JNI 入口（APK 模式）
 ├── android/                    # Java 薄壳 APK 工程

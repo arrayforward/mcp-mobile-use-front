@@ -1,6 +1,6 @@
 # mcp_mobile_use 接口文档
 
-`mcp_mobile_use` 是一个运行在云手机 Android 环境内部的 MCP（Model Context Protocol）服务，参考 `mcp_server_mobile_use`（Go 实现，基于火山引擎 ACEP 云 API）封装，提供云手机操控能力。
+`mcp_mobile_use` 是一个运行在云手机 Android 环境内部的 MCP（Model Context Protocol）服务，参考 `mcp_server_mobile_use`（Go 实现，基于火山引擎 ACEP 云 API）封装，提供云手机操控能力（13 个工具）。
 
 与参考实现的关键差异：本服务**运行在设备内部**，设备操作默认直接执行本机 shell 命令（`input`、`screencap`、`am`、`pm` 等），不依赖 adb 传输层，也不依赖云厂商 API。
 
@@ -24,6 +24,7 @@
   - [close_app](tools/close_app.md)：关闭应用
   - [list_apps](tools/list_apps.md)：应用列表
   - [autoinstall_app](tools/autoinstall_app.md)：安装应用
+  - [adb_shell](tools/adb_shell.md)：标准 adb shell 命令
   - [terminate](tools/terminate.md)：结束会话
 
 ## 工具一览
@@ -41,6 +42,7 @@
 | `close_app` | 强制停止应用 | `am force-stop <pkg>` |
 | `list_apps` | 列出已安装应用 | `pm list packages` |
 | `autoinstall_app` | 下载并安装 APK | `curl`/`wget` + `pm install` |
+| `adb_shell` | 执行标准 adb shell 命令 | `sh -c <command>`（通用接口） |
 | `terminate` | 结束会话 | - |
 
 ## 通用参数

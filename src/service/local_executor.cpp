@@ -119,10 +119,19 @@ public:
         }
 
         if (!result.timedOut) {
-            if (WIFEXITED(status))
+            if (!childDone) {
+                waitpid(pid, &status, 0);
+                childDone = true;
+            }
+            if (WIFEXITED(status)) {
                 result.exitCode = WEXITSTATUS(status);
-            else
+            } else if (WIFSIGNALED(status)) {
                 result.exitCode = -1;
+                result.error = std::string("command killed by signal ") +
+                               std::to_string(WTERMSIG(status));
+            } else {
+                result.exitCode = -1;
+            }
         }
         return result;
     }
