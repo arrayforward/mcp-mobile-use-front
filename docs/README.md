@@ -6,7 +6,8 @@
 
 ## 目录
 
-- [架构设计](architecture.md)
+- [架构设计](architecture.md)：分层架构 / 线程模型 / 传输时序 / 鉴权体系 / 执行后端 / ADR（含大量 mermaid 流程图）
+- [API 设计](api.md)：传输端点 / JSON-RPC 协议 / 鉴权规范 / 13 个工具完整参数与示例
 - [安全方案（鉴权 + HTTPS）](security.md)
 - [部署方案](deployment.md)
 - [使用说明](usage.md)
